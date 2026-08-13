@@ -6,7 +6,7 @@
 # SSOT). Every locked standard below cites its config.py / SPEC source. See
 # RECONCILIATION_REPORT.md for the line-by-line diff table.
 #
-# EPISODE structure (assemble.py default · PRODUCTION LAW v1.0 2026-08-05):
+# EPISODE structure (assemaavble.py default · PRODUCTION LAW v1.0 2026-08-05):
 #   Tudum(norm) -> EpisodeBody(WM + narration+S3 bed ducked) -> Silence 1.5s
 #     -> Hymn-B section (cross-glow + ribbon 5s/30s + credits 30s fade)
 #   (intro_card OFF · outro tudum OFF by default · credits = the only ending)
