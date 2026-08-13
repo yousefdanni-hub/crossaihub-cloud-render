@@ -1,0 +1,8 @@
+# CrossAIHub — BODY segment order (one b-roll filename per line, in play order).
+# Files are pulled from Google Drive into assets/episodes/pair07/ (or shared library).
+# Lines starting with # and blank lines are ignored. Order = crossfade order.
+broll_dawn_water_01.mp4
+broll_desert_road_02.mp4
+broll_candle_closeup_03.mp4
+broll_open_bible_04.mp4
+broll_sky_timelapse_05.mp4

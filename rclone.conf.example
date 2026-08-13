@@ -1,0 +1,11 @@
+# EXAMPLE rclone config for Google Drive.
+# Generate the REAL one ONCE on any machine with:  rclone config
+# (choose: n -> name it "gdrive" -> storage "drive" -> follow OAuth in browser)
+# Then copy the WHOLE resulting rclone.conf text into the GitHub secret RCLONE_CONF.
+# Do NOT commit the real token. This example is illustrative only.
+
+[gdrive]
+type = drive
+scope = drive.readonly
+token = {"access_token":"REDACTED","token_type":"Bearer","refresh_token":"REDACTED","expiry":"2026-01-01T00:00:00Z"}
+team_drive =

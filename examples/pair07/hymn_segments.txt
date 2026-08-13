@@ -1,0 +1,5 @@
+# CrossAIHub — HYMN (psalm) visual order, one filename per line, in play order.
+# The hymn audio itself is psalm23.* (or hymn.*) in this same folder.
+hymn_still_mountain_01.mp4
+hymn_river_flow_02.mp4
+hymn_sunrise_03.mp4

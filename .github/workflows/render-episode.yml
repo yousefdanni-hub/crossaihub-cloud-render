@@ -1,0 +1,134 @@
+name: CrossAIHub — Cloud Render (episode + hymn)
+
+# ---------------------------------------------------------------------------
+# Triggered ON DEMAND. Runs the RECONCILED locked render (render_episode.sh +
+# render_hymn_section.py) — reconciled 2026-08-08 to _pipeline_v4/config.py:
+#   CRF 18 · AAC 384k/48k + S3 music bed + sidechain · watermark top-right
+#   full-duration + zero-gap QC (fa499139) · ribbon 5s/30s PNG overlay ·
+#   credits 30s fade PNG overlay · audio-driven cross resurrection glow.
+# See RECONCILIATION_REPORT.md. Render is NOT auto-triggered by provisioning.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      pair:
+        description: "Pair number (e.g. 04)"
+        required: true
+        type: string
+      psalm:
+        description: "Psalm number (e.g. 121)"
+        required: true
+        type: string
+      generate_tts:
+        description: "Generate narration in the cloud with OpenAI TTS? (else expects the approved narration.* in Drive)"
+        required: false
+        default: false
+        type: boolean
+      crf:
+        description: "libx264 CRF (LOCKED 18 per config.py ENC_V — do not change)"
+        required: false
+        default: "18"
+        type: string
+      push_to_drive:
+        description: "Upload the finished mp4 + QC back to Google Drive?"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-pair-${{ inputs.pair }}-psalm-${{ inputs.psalm }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest      # public repo => 4 vCPU / 16 GB, unlimited free minutes
+    timeout-minutes: 120
+
+    env:
+      PAIR:   ${{ inputs.pair }}
+      PSALM:  ${{ inputs.psalm }}
+      CRF:    ${{ inputs.crf }}
+      ASSETS_DIR: ${{ github.workspace }}/assets
+      OUT_DIR:    ${{ github.workspace }}/out
+      DRIVE_REMOTE:  ${{ vars.DRIVE_REMOTE || 'gdrive' }}
+      DRIVE_ROOT:    ${{ vars.DRIVE_ROOT   || 'crossaihub_assets' }}
+      DRIVE_OUT_DIR: ${{ vars.DRIVE_OUT_DIR || 'crossaihub_renders' }}
+
+    steps:
+      - name: Checkout repo (workflow + scripts only)
+        uses: actions/checkout@v4
+
+      - name: Install ffmpeg + rclone + python (Pillow for watermark QC)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg rclone python3-pip
+          pip install --quiet --break-system-packages pillow
+          ffmpeg -version | head -n1
+          rclone version | head -n1
+          python3 -c "import PIL, sys; print('Pillow', PIL.__version__)"
+
+      - name: Configure rclone from secret
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          if [ -z "${RCLONE_CONF}" ]; then
+            echo "::error::RCLONE_CONF secret is not set. Add it in repo Settings -> Secrets."
+            exit 1
+          fi
+          mkdir -p ~/.config/rclone
+          printf '%s' "${RCLONE_CONF}" > ~/.config/rclone/rclone.conf
+          chmod 600 ~/.config/rclone/rclone.conf
+          rclone listremotes
+
+      - name: Pull ONLY the needed assets from Google Drive
+        run: |
+          set -e
+          mkdir -p "${ASSETS_DIR}/brand" "${ASSETS_DIR}/episodes/pair${PAIR}"
+          # Shared brand assets: watermark(fa499139) · tudum · S3_Theme bed ·
+          # _locked_overlays/ (hymn_NN ribbon · credits_overlay · cross glow).
+          rclone copy "${DRIVE_REMOTE}:${DRIVE_ROOT}/brand" \
+                      "${ASSETS_DIR}/brand" --fast-list --transfers 8 -v
+          # This episode's inputs (approved narration · hymn take_B + cover ·
+          # body_segments.txt + the chosen nature b-roll clips).
+          rclone copy "${DRIVE_REMOTE}:${DRIVE_ROOT}/episodes/pair${PAIR}" \
+                      "${ASSETS_DIR}/episodes/pair${PAIR}" --fast-list --transfers 8 -v
+          echo "Pulled assets:"; du -sh "${ASSETS_DIR}" || true
+
+      - name: (Optional) Generate narration with OpenAI TTS
+        if: ${{ inputs.generate_tts == true }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "::error::generate_tts=true but OPENAI_API_KEY secret is missing."
+            exit 1
+          fi
+          pip install --quiet --break-system-packages openai
+          python3 scripts/generate_tts.py \
+            "${ASSETS_DIR}/episodes/pair${PAIR}/narration_script.txt" \
+            "${ASSETS_DIR}/episodes/pair${PAIR}/narration.mp3"
+
+      - name: Render (RECONCILED locked pipeline · config.py)
+        run: bash scripts/render_episode.sh
+
+      - name: Upload final mp4 + QC samples as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: crossaihub-pair${{ inputs.pair }}-psalm${{ inputs.psalm }}
+          path: |
+            out/*.mp4
+            out/qc/*.png
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: (Optional) Push results back to Google Drive
+        if: ${{ inputs.push_to_drive == true }}
+        run: |
+          rclone copy "${OUT_DIR}" \
+            "${DRIVE_REMOTE}:${DRIVE_OUT_DIR}/pair${PAIR}_psalm${PSALM}" \
+            --transfers 4 -v
+          echo "Uploaded final render to Drive: ${DRIVE_OUT_DIR}/pair${PAIR}_psalm${PSALM}"

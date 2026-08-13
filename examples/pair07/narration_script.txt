@@ -1,0 +1,5 @@
+This is a placeholder narration script for pair 07.
+
+Only used when the workflow is dispatched with generate_tts = true. Replace this
+file's contents (in Google Drive) with the real episode narration text, or drop a
+ready-made narration.mp3 into the same folder and leave generate_tts = false.

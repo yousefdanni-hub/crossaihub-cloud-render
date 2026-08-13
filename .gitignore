@@ -1,0 +1,12 @@
+# Never commit assets, renders, secrets, or intermediates.
+assets/
+out/
+*.mp4
+*.mov
+*.mp3
+*.wav
+*.png
+!.gitkeep
+rclone.conf
+.config/
+/tmp/
