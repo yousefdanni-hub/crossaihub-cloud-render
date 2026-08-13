@@ -6,7 +6,7 @@
 # SSOT). Every locked standard below cites its config.py / SPEC source. See
 # RECONCILIATION_REPORT.md for the line-by-line diff table.
 #
-# EPISODE structure (assemaavble.py default · PRODUCTION LAW v1.0 2026-08-05):
+# EPISODE structure (assemble.py default · PRODUCTION LAW v1.0 2026-08-05):
 #   Tudum(norm) -> EpisodeBody(WM + narration+S3 bed ducked) -> Silence 1.5s
 #     -> Hymn-B section (cross-glow + ribbon 5s/30s + credits 30s fade)
 #   (intro_card OFF · outro tudum OFF by default · credits = the only ending)
@@ -181,8 +181,20 @@ case "$PIXFMT" in yuv420p|yuvj420p) : ;; *) die "QC FAIL: pix_fmt $PIXFMT";; esa
 ACODEC="$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,sample_rate -of csv=p=0 "$FINAL")"
 echo "  audio: $ACODEC"; echo "$ACODEC" | grep -q '^aac,48000' || die "QC FAIL: audio $ACODEC != aac/48000"
 python3 - "$FINAL" <<'PY' || die "QC FAIL: faststart (moov not before mdat)"
-import sys; d=open(sys.argv[1],'rb').read(400000)
-sys.exit(0 if (d.find(b'moov')!=-1 and d.find(b'moov')<d.find(b'mdat')) else 1)
+import sys, struct
+f=open(sys.argv[1],'rb'); order=[]
+while True:
+    hdr=f.read(8)
+    if len(hdr)<8: break
+    size=struct.unpack('>I',hdr[:4])[0]; typ=hdr[4:8].decode('latin1','replace'); adv=8
+    if size==1:
+        size=struct.unpack('>Q',f.read(8))[0]; adv=16
+    order.append(typ)
+    if size==0: break
+    f.seek(size-adv,1)
+mi=order.index('moov') if 'moov' in order else -1
+di=order.index('mdat') if 'mdat' in order else -1
+sys.exit(0 if (mi!=-1 and di!=-1 and mi<di) else 1)
 PY
 log "  format QC OK (1920x1080 · aac/48k · faststart)"
 
