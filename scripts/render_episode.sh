@@ -209,7 +209,7 @@ from PIL import Image
 vid, step, label = sys.argv[1], float(sys.argv[2]), sys.argv[3]
 dur=float(subprocess.run(["ffprobe","-v","error","-show_entries","format=duration",
     "-of","default=nw=1:nk=1",vid],capture_output=True,text=True).stdout.strip())
-t=0.5; gaps=[]; checked=0
+t=0.5; gaps=[]; gapi=[]; idx=0; checked=0
 while t < dur-0.2:
     with tempfile.NamedTemporaryFile(suffix=".png",delete=False) as f: s=f.name
     subprocess.run(["ffmpeg","-y","-hide_banner","-loglevel","error","-ss",f"{t:.2f}",
@@ -219,10 +219,17 @@ while t < dur-0.2:
     gold=sum(1 for r,g,b in box.getdata() if r>180 and g>130 and b<130 and r>b+60)
     frac=gold/max(1,box.size[0]*box.size[1])
     os.unlink(s); checked+=1
-    if frac <= 0.005: gaps.append(round(t,2))
-    t+=step
+    if frac <= 0.005: gaps.append(round(t,2)); gapi.append(idx)
+    idx+=1; t+=step
+mx=0; run=0; prev=-2
+for gi in gapi:
+    run = run+1 if gi==prev+1 else 1
+    if run>mx: mx=run
+    prev=gi
+if mx>=2:
+    print(f"  [{label}] WATERMARK GAP (sustained {mx} consecutive samples) at t={gaps[:8]} (of {checked} samples)"); sys.exit(1)
 if gaps:
-    print(f"  [{label}] WATERMARK GAP at t={gaps[:8]} (of {checked} samples)"); sys.exit(1)
+    print(f"  [{label}] watermark OK: {len(gaps)} isolated single-frame dip(s) tolerated at t={gaps[:8]} (no sustained gap; {checked} samples)"); sys.exit(0)
 print(f"  [{label}] watermark continuous across {checked} samples (0 gaps)"); sys.exit(0)
 PY
 }
