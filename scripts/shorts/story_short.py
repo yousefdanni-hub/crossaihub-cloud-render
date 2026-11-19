@@ -11,7 +11,8 @@ Fm.W, Fm.H = 1080, 1920; Fm.XF = 1.2; Fm.DRAFT = False; W, H, FPS = 1080, 1920, 
 FD = Fm.FD; GOLD, CREAM = (244, 200, 112, 255), (255, 246, 230, 255)
 SEAL = os.path.join(Fm.D, "brand_seal", "v3", "dark", "watermark-dark_300.png")
 def font(n, s): return ImageFont.truetype(os.path.join(FD, n), s)
-END_S = 4.0   # Danni 11-17: the end question/answer card stays 4 s
+V27 = True
+END_S = 4.0   # Danni 11-17: the end question/answer card stays 4 s (v2.7: 5.0 → ≥ 4 s fully visible after the fades)
 
 
 def _lum(rgb):
@@ -98,7 +99,7 @@ def end_card(q, out, sub=None, zone="low", plate=None):
     fa = font("cormorant-garamond-latin-700-normal.ttf", 112); fs = font("cormorant-garamond-latin-700-normal.ttf", 66)   # v2.3 bigger answer · v2.1 bolder site line
     a = q.strip()
     while d.textlength(a, font=fa) > W - 200 and fa.size > 60: fa = font("cormorant-garamond-latin-700-normal.ttf", fa.size - 4)
-    l2 = "Full story: crossaihub.com"
+    l2 = "Search CrossAIHub · crossaihub.com" if V27 else "Full story: crossaihub.com"   # v2.7 (Danni/Dispatch 11-19)
     while d.textlength(l2, font=fs) > W - 240 and fs.size > 40: fs = font("cormorant-garamond-latin-600-normal.ttf", fs.size - 2)
     hgt = int(fa.size * 1.15) + 18 + int(fs.size * 1.2)
     sb = sub_band(plate) if plate else 1280   # v2.4: the answer card goes in the calm band ABOVE the detected subject (same rule as the lyrics)
@@ -227,13 +228,36 @@ def next_up_card(nu, out, plate):
     line = f"Next · {nu['when']}: {nu['hymn']}"; d = ImageDraw.Draw(im)
     while d.textlength(line, font=f) > W - 140 and f.size > 34: f = font("inter-latin-600-normal.ttf", f.size - 2)
     shade(im, 1500, 1640, ink(plate, (70, 1500, W - 70, 1640)) if plate else 180)
-    _center(im, 1512, line, f, CREAM); _center(im, 1575, "Subscribe to sing with us", font("inter-latin-600-normal.ttf", 40), GOLD)
+    _center(im, 1512, line, f, CREAM)
+    if not V27: _center(im, 1575, "Subscribe to sing with us", font("inter-latin-600-normal.ttf", 40), GOLD)   # v2.7: the subscribe ask moves to the last-3-s CTA
+    im.save(out)
+
+
+def cta_card(out, plate=None):
+    """v2.7 (Danni/Dispatch 11-19): a light, specific CTA in the LAST 3 s only (never at the start → retention): a red 'Subscribe for
+    tomorrow's hymn' pill + a small like (heart) badge, breathing gently, and a share line. Top band (the title is long gone by then)."""
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(im); f = font("inter-latin-600-normal.ttf", 46); t = "Subscribe for tomorrow's hymn"
+    tw = d.textlength(t, font=f); pw = tw + 96; x0 = (W - pw - 120) / 2; y0 = 330
+    shade(im, 300, 560, ink(plate, (60, 300, W - 60, 560)) if plate else 160)
+    d = ImageDraw.Draw(im); d.rounded_rectangle((x0, y0, x0 + pw, y0 + 92), radius=46, fill=(204, 0, 0, 240))
+    d.polygon([(x0 + 34, y0 + 30), (x0 + 34, y0 + 62), (x0 + 60, y0 + 46)], fill=(255, 255, 255, 255))   # play glyph
+    d.text((x0 + 76, y0 + 18), t, font=f, fill=(255, 255, 255, 255))
+    cx, cy = x0 + pw + 70, y0 + 46; d.ellipse((cx - 46, cy - 46, cx + 46, cy + 46), fill=(255, 255, 255, 235))   # like badge (heart)
+    d.ellipse((cx - 24, cy - 16, cx + 2, cy + 8), fill=(204, 0, 0, 255)); d.ellipse((cx - 2, cy - 16, cx + 24, cy + 8), fill=(204, 0, 0, 255))
+    d.polygon([(cx - 24, cy - 2), (cx + 24, cy - 2), (cx, cy + 26)], fill=(204, 0, 0, 255))
+    _center(im, y0 + 120, "Send this to someone who loves this hymn", font("cormorant-garamond-latin-700-normal.ttf", 52), CREAM)
     im.save(out)
 
 
 def main():
     spec = json.load(open(sys.argv[1])); out = spec["out"]; wd = out + "_work"; os.makedirs(wd, exist_ok=True)
-    t0, t1 = float(spec["t0"]), float(spec["t1"]); L = t1 - t0; assert L <= 58.5, "Short longer than 58 s"
+    global END_S, V27
+    V27 = spec.get("template", "v2.7") >= "v2.7"
+    t0, t1 = float(spec["t0"]), float(spec["t1"])
+    if V27:
+        END_S = 5.0; _nx = [l["start"] for l in json.load(open(spec["lyrics"]))["lines"] if l["start"] >= t1 - 0.05]
+        t1 += max(0.0, min(1.0, (_nx[0] - t1 - 0.2) if _nx else 1.0))   # v2.7: end card ≥ 4 s fully visible (fades eat ~0.7 s); 1 s more of the hymn tail so no sung line is cut for it
+    L = t1 - t0; assert L <= 58.5, "Short longer than 58 s"
     if spec.get("loop") and not 19.5 <= L <= 25.5: print(f"⚠ Ask Studio rule: length {L:.1f}s outside 20–25 s", flush=True)
     LP = 0.7 if spec.get("loop") else 0.0   # loop tail: last 0.7 s fades back into frame 1 (picture + title block) so the replay is seamless
     sc = spec["scenes"]; n = len(sc); clips = []
@@ -277,7 +301,7 @@ def main():
                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-r", str(FPS), "-t", f"{L:.3f}", lb], check=True)
         os.replace(lb, base)
     ov = []; bb = os.path.join(wd, "band.png"); bottom_band(bb); ov.append((bb, 0.0, L))   # 11-15: one solid soft band behind ALL lower text, whole Short
-    V26 = spec.get("template", "v2.6") >= "v2.6"   # Arena 11-18: frame-one singing, 2-line lyrics, verse moment, next-hymn ask (new renders only)
+    V26 = spec.get("template", "v2.7") >= "v2.6"   # Arena 11-18: frame-one singing, 2-line lyrics, verse moment, next-hymn ask (new renders only)
     tb = os.path.join(wd, "title.png")
     if V26: small_title(spec, tb, plate=sc[0]); ov.append((tb, 0.0, 3.0))
     else: title_block(spec, tb, plate=sc[0]); ov.append((tb, 0.0, 3.0 if "pace_title" in IMP else 4.2))
@@ -304,11 +328,13 @@ def main():
         ll = LS[-1]; a_ = ll["start"] - t0 + 0.55 * (ll["end"] - ll["start"])
         nu = os.path.join(wd, "nextup.png"); next_up_card(spec["next_up"], nu, sc[-1]); ov.append((nu, max(0.0, a_), stop + 0.2))
     ec = os.path.join(wd, "end.png"); end_card(spec["end_q"], ec, spec.get("end_sub"), zone=clear_zone(sc[-1]), plate=sc[-1]); ov.append((ec, L - END_S - LP, L - LP) if LP else (ec, L - END_S, L))   # Danni 11-17: end question/answer on screen 4 s
+    if V27: ct = os.path.join(wd, "cta.png"); cta_card(ct, sc[-1]); ov.append((ct, L - 3.0 - LP, L - LP))   # last 3 s only
     mk = os.path.join(wd, "marks.png"); marks(mk)   # v2.3: the tiny seal is no longer overlaid (judge: illegible at phone size; brand = @crossaihub on the end card)
     ov = [(q, a, b) for q, a, b in ov if b - a > 0.4]
     oin = sum((["-loop", "1", "-framerate", str(FPS), "-t", f"{b - a:.3f}", "-i", q] for q, a, b in ov), []); f2 = []; lv = "[0:v]"
     for k, (q, a, b) in enumerate(ov, 1):
         if q.endswith(("marks.png", "band.png")): fade = ""
+        elif q.endswith("cta.png"): fade = f",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*(0.78+0.22*sin(2*PI*T/1.2))',fade=t=in:st=0:d=0.3:alpha=1,fade=t=out:st={max(0, b - a - 0.25):.2f}:d=0.25:alpha=1"   # gentle breathing
         elif (LP or V26) and q.endswith("title.png"): fade = f",fade=t=out:st={b - a - 0.35:.2f}:d=0.35:alpha=1"      # visible from frame 1 (challenge ≤ 1.5 s)
         elif V26 and os.path.basename(q).startswith("sub"): fade = (f",fade=t=in:st=0:d=0.12:alpha=1" if a > 0.05 else "") + f",fade=t=out:st={max(0, b - a - 0.12):.2f}:d=0.12:alpha=1"   # v2.6: crisp hand-over, first line on frame 0
         elif LP and q.endswith("title_loop.png"): fade = f",fade=t=in:st=0:d={LP - 0.05:.2f}:alpha=1"        # ends exactly like frame 1
