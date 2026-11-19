@@ -1,0 +1,46 @@
+name: CrossAIHub — Cloud site check (public pages only → R2)
+
+# Read-only checks of the PUBLIC live site (crossaihub.com) on a free runner: headless Playwright scripts in scripts/checks/.
+# Optional inputs come as a small bundle from our R2 tmp bucket (page lists / page-visit counts, no personal data). Results go to R2 through
+# our write-only upload Worker (repo secrets). No secrets in code.
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:     { description: "job id (file-safe)", required: true, type: string }
+      script:     { description: "beige_scan | site_shots", required: true, type: string }
+      bundle_url: { description: "optional input bundle on our R2 tmp bucket", required: false, type: string, default: "" }
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Playwright
+        run: |
+          python3 -m pip install -q playwright && python3 -m playwright install --with-deps chromium >/dev/null
+      - name: Inputs
+        env: { BUNDLE_URL: "${{ inputs.bundle_url }}" }
+        run: |
+          mkdir -p "$HOME/job"
+          if [ -n "$BUNDLE_URL" ]; then
+            case "$BUNDLE_URL" in https://pub-8166648ae7554a43a725397684bda237.r2.dev/cloud-render/in/*) ;; *) echo "refused: bundle must come from our R2 tmp bucket"; exit 2;; esac
+            curl -fsSL "$BUNDLE_URL" -o b.tar.gz && tar -xzf b.tar.gz -C "$HOME/job"
+          fi
+      - name: Run
+        env: { SCRIPT: "${{ inputs.script }}" }
+        run: |
+          case "$SCRIPT" in beige_scan|site_shots) ;; *) echo "unknown script"; exit 2;; esac
+          mkdir -p out && OUT="$PWD/out" IN="$HOME/job" python3 -u "scripts/checks/$SCRIPT.py"
+      - name: Upload to R2 (write-only Worker)
+        env:
+          JOB: "${{ inputs.job_id }}"
+          UP_URL: "${{ secrets.CLOUD_RENDER_UPLOAD_URL }}"
+          UP_KEY: "${{ secrets.CLOUD_RENDER_UPLOAD_KEY }}"
+        run: |
+          n=0; for f in out/*; do b=$(basename "$f"); ct=application/octet-stream
+            case "$b" in *.png) ct=image/png;; *.json) ct=application/json;; *.md) ct=text/markdown;; esac
+            curl -fsS -X PUT -H "X-Upload-Key: $UP_KEY" -H "Content-Type: $ct" --data-binary @"$f" "$UP_URL/out/$JOB/$b" >/dev/null && n=$((n+1)); done; echo "uploaded $n files"
