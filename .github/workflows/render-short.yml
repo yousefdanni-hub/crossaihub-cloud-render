@@ -1,0 +1,46 @@
+name: CrossAIHub — Cloud Short render (R2 bundle in → ffmpeg → artifact out)
+
+# Runs the SAME Shorts engine as the Mac (scripts/shorts/story_short.py + film.py, copied verbatim) on a free public-repo runner.
+# Input: a job bundle (tar.gz) from our R2 public tmp bucket (7-day lifecycle) holding the spec + its own media (our own / public-domain
+# hymn audio, lyrics, plates, our fonts + seal). No secrets in code; no secrets needed for this flow. Output: the mp4 + check frames as a
+# short-lived artifact; the Mac downloads it and does the YouTube upload. Triggered by the Mac (workflow_dispatch).
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:      { description: "job id (file-safe)", required: true, type: string }
+      bundle_url:  { description: "https URL of the job bundle on our R2 public tmp bucket", required: true, type: string }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: short-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          python3 -m pip install -q pillow numpy opencv-python-headless
+          ffmpeg -version | head -1
+      - name: Fetch bundle (our R2 tmp bucket only)
+        env: { BUNDLE_URL: "${{ inputs.bundle_url }}" }
+        run: |
+          case "$BUNDLE_URL" in https://pub-8166648ae7554a43a725397684bda237.r2.dev/cloud-render/in/*) ;; *) echo "refused: bundle must come from our R2 tmp bucket"; exit 2;; esac
+          curl -fsSL "$BUNDLE_URL" -o bundle.tar.gz && tar -xzf bundle.tar.gz -C "$HOME" && ls "$HOME"
+      - name: Render
+        env: { JOB: "${{ inputs.job_id }}" }
+        run: |
+          S="$HOME/job/spec.json"; sed -i "s#/Users/crossaihub#$HOME#g" "$S"
+          OUT=$(python3 -c "import json;print(json.load(open('$S'))['out'])"); mkdir -p "$(dirname "$OUT")"
+          cp scripts/shorts/film.py scripts/shorts/story_short.py "$HOME/job/"
+          time python3 -u "$HOME/job/story_short.py" "$S"
+          mkdir -p out && cp "$OUT" "out/$JOB.mp4" && cp "${OUT%.mp4}"_frame_*.jpg out/ 2>/dev/null || true
+          ffprobe -v error -show_entries format=duration:stream=width,height -of default=nw=1 "out/$JOB.mp4"
+      - uses: actions/upload-artifact@v4
+        with: { name: "short-${{ inputs.job_id }}", path: out/, retention-days: 3 }
