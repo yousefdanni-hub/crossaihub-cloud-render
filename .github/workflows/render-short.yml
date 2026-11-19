@@ -1,9 +1,10 @@
-name: CrossAIHub — Cloud Short render (R2 bundle in → ffmpeg → artifact out)
+name: CrossAIHub — Cloud Short render (R2 bundle in → ffmpeg → R2 out)
 
 # Runs the SAME Shorts engine as the Mac (scripts/shorts/story_short.py + film.py, copied verbatim) on a free public-repo runner.
 # Input: a job bundle (tar.gz) from our R2 public tmp bucket (7-day lifecycle) holding the spec + its own media (our own / public-domain
-# hymn audio, lyrics, plates, our fonts + seal). No secrets in code; no secrets needed for this flow. Output: the mp4 + check frames as a
-# short-lived artifact; the Mac downloads it and does the YouTube upload. Triggered by the Mac (workflow_dispatch).
+# hymn audio, lyrics, plates, our fonts + seal). No secrets in code. Output → R2 through our WRITE-ONLY upload Worker (repo secrets
+# CLOUD_RENDER_UPLOAD_URL / CLOUD_RENDER_UPLOAD_KEY; one prefix, no read/list/delete); a 1-day artifact stays as fallback.
+# The Mac fetches from R2 and does the YouTube upload. Triggered by the Mac (workflow_dispatch).
 on:
   workflow_dispatch:
     inputs:
@@ -42,5 +43,16 @@ jobs:
           time python3 -u "$HOME/job/story_short.py" "$S"
           mkdir -p out && cp "$OUT" "out/$JOB.mp4" && cp "${OUT%.mp4}"_frame_*.jpg out/ 2>/dev/null || true
           ffprobe -v error -show_entries format=duration:stream=width,height -of default=nw=1 "out/$JOB.mp4"
+      - name: Upload to R2 (write-only Worker)
+        env:
+          JOB: "${{ inputs.job_id }}"
+          UP_URL: "${{ secrets.CLOUD_RENDER_UPLOAD_URL }}"
+          UP_KEY: "${{ secrets.CLOUD_RENDER_UPLOAD_KEY }}"
+        run: |
+          for f in out/*; do
+            n=$(basename "$f"); ct=application/octet-stream; case "$n" in *.mp4) ct=video/mp4;; *.jpg) ct=image/jpeg;; esac
+            curl -fsS -X PUT -H "X-Upload-Key: $UP_KEY" -H "Content-Type: $ct" --data-binary @"$f" "$UP_URL/out/$JOB/$n" && echo " ← $n"
+          done
       - uses: actions/upload-artifact@v4
-        with: { name: "short-${{ inputs.job_id }}", path: out/, retention-days: 3 }
+        if: always()
+        with: { name: "short-${{ inputs.job_id }}", path: out/, retention-days: 1 }
