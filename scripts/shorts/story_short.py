@@ -249,6 +249,40 @@ def cta_card(out, plate=None):
     im.save(out)
 
 
+def cta_card2(out, style, line, plate=None, gift=True):
+    """SAMPLE ONLY (11-22, for Danni): calm end card in the top safe zone (y 250–700): OUR official seal (brand_seal v3, never redrawn),
+    Subscribe · Like · Share as quiet line icons, and one warm family line. style navy = gold on navy glass · light = navy on cream."""
+    navy, gold, cream = (11, 31, 58), (212, 175, 55), (246, 236, 214)
+    bg, fg, acc = ((11, 31, 58, 205), cream, gold) if style == "navy" else ((246, 236, 214, 225), navy, (150, 112, 30))
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); x0, y0, x1, y1 = 90, 250, W - 90, (850 if gift else 700)
+    panel = Image.new("RGBA", (x1 - x0, y1 - y0), (0, 0, 0, 0)); ImageDraw.Draw(panel).rounded_rectangle((0, 0, x1 - x0 - 1, y1 - y0 - 1), radius=36, fill=bg, outline=acc + (180,), width=2)
+    im.alpha_composite(panel, (x0, y0)); d = ImageDraw.Draw(im)
+    sp = os.path.join(Fm.D, "brand_seal", "v3", "light", "crossaihub-seal-v3-light_circle_1024.png") if style == "navy" else os.path.join(Fm.D, "brand_seal", "v3", "main", "crossaihub-seal-v3-main_circle_1024.png")
+    try:
+        seal = Image.open(sp).convert("RGBA"); seal.thumbnail((120, 120), Image.LANCZOS); im.alpha_composite(seal, ((W - seal.width) // 2, y0 + 26))
+    except Exception: pass
+    cy = y0 + 200; r = 34; labels = ("Subscribe", "Like", "Share"); fl = font("inter-latin-600-normal.ttf", 30)
+    for i, lab in enumerate(labels):
+        cx = W // 2 + (i - 1) * 230; d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=acc + (255,), width=3)
+        if i == 0: d.polygon([(cx - 10, cy - 15), (cx - 10, cy + 15), (cx + 16, cy)], fill=acc + (255,))   # play = subscribe to our channel
+        elif i == 1:   # heart
+            d.ellipse((cx - 17, cy - 13, cx + 1, cy + 5), fill=acc + (255,)); d.ellipse((cx - 1, cy - 13, cx + 17, cy + 5), fill=acc + (255,)); d.polygon([(cx - 17, cy - 1), (cx + 17, cy - 1), (cx, cy + 18)], fill=acc + (255,))
+        else:   # share arrow
+            d.line([(cx - 14, cy + 12), (cx - 14, cy - 2), (cx + 6, cy - 2)], fill=acc + (255,), width=4); d.polygon([(cx + 4, cy - 12), (cx + 18, cy - 2), (cx + 4, cy + 8)], fill=acc + (255,))
+        w = d.textlength(lab, font=fl); d.text((cx - w / 2, cy + r + 10), lab, font=fl, fill=fg + (235,))
+    f = font("cormorant-garamond-latin-700-normal.ttf", 50); y = cy + r + 64
+    for row in line.split("\n"):
+        while d.textlength(row, font=f) > (x1 - x0 - 60) and f.size > 36: f = font("cormorant-garamond-latin-700-normal.ttf", f.size - 2)
+        w = d.textlength(row, font=f); d.text(((W - w) / 2, y), row, font=f, fill=fg + (255,)); y += int(f.size * 1.18)
+    if gift:   # Danni 11-22: the free gift, as plain on-screen text (not clickable in Shorts; no "click here"); valid through 12-25
+        d.line([(W // 2 - 160, y + 20), (W // 2 + 160, y + 20)], fill=acc + (150,), width=2); fg2 = font("inter-latin-600-normal.ttf", 34)
+        t = "Your free Christmas gift: crossaihub.com/gift"; w = d.textlength(t, font=fg2); d.text(((W - w) / 2, y + 34), t, font=fg2, fill=acc + (255,))
+        f3 = font("inter-latin-400-normal.ttf", 30); t3 = "Link in the first comment"; w3 = d.textlength(t3, font=f3); ax = (W + w3) / 2 + 22; ay = y + 92
+        d.text(((W - w3) / 2 - 14, y + 80), t3, font=f3, fill=fg + (220,))   # Danni 11-22: where the clickable link is
+        d.line([(ax, ay - 12), (ax, ay + 10)], fill=fg + (220,), width=3); d.polygon([(ax - 8, ay + 4), (ax + 8, ay + 4), (ax, ay + 16)], fill=fg + (220,))
+    im.save(out)
+
+
 def main():
     spec = json.load(open(sys.argv[1])); out = spec["out"]; wd = out + "_work"; os.makedirs(wd, exist_ok=True)
     global END_S, V27
@@ -328,18 +362,23 @@ def main():
         ll = LS[-1]; a_ = ll["start"] - t0 + 0.55 * (ll["end"] - ll["start"])
         nu = os.path.join(wd, "nextup.png"); next_up_card(spec["next_up"], nu, sc[-1]); ov.append((nu, max(0.0, a_), stop + 0.2))
     ec = os.path.join(wd, "end.png"); end_card(spec["end_q"], ec, spec.get("end_sub"), zone=clear_zone(sc[-1]), plate=sc[-1]); ov.append((ec, L - END_S - LP, L - LP) if LP else (ec, L - END_S, L))   # Danni 11-17: end question/answer on screen 4 s
-    if V27: ct = os.path.join(wd, "cta.png"); cta_card(ct, sc[-1]); ov.append((ct, L - 3.0 - LP, L - LP))   # last 3 s only
+    # 11-22 Danni: the red flashing subscribe pill felt like an alarm → OFF on every render. A new calm card exists only as a SAMPLE
+    # (spec "cta_style": "navy" | "light") until Danni approves it; nothing with a new design uploads before his OK.
+    if V27 and spec.get("cta_style"):
+        ct = os.path.join(wd, "cta2.png"); cta_card2(ct, spec["cta_style"], spec.get("cta_line") or "Thank you for singing with us.\nSubscribe so tomorrow's hymn finds you.", sc[-1], gift=str(spec.get("date") or "2026-12-25") <= "2026-12-25"); ov.append((ct, L - 3.5 - LP, L - LP))
     mk = os.path.join(wd, "marks.png"); marks(mk)   # v2.3: the tiny seal is no longer overlaid (judge: illegible at phone size; brand = @crossaihub on the end card)
     ov = [(q, a, b) for q, a, b in ov if b - a > 0.4]
     oin = sum((["-loop", "1", "-framerate", str(FPS), "-t", f"{b - a:.3f}", "-i", q] for q, a, b in ov), []); f2 = []; lv = "[0:v]"
     for k, (q, a, b) in enumerate(ov, 1):
         if q.endswith(("marks.png", "band.png")): fade = ""
+        elif q.endswith("cta2.png"):   # calm: fade + 40 px slide-up once, then STILL (no pulse, no flash)
+            fade = f",fade=t=in:st=0:d=0.6:alpha=1"
         elif q.endswith("cta.png"): fade = f",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*(0.78+0.22*sin(2*PI*T/1.2))',fade=t=in:st=0:d=0.3:alpha=1,fade=t=out:st={max(0, b - a - 0.25):.2f}:d=0.25:alpha=1"   # gentle breathing
         elif (LP or V26) and q.endswith("title.png"): fade = f",fade=t=out:st={b - a - 0.35:.2f}:d=0.35:alpha=1"      # visible from frame 1 (challenge ≤ 1.5 s)
         elif V26 and os.path.basename(q).startswith("sub"): fade = (f",fade=t=in:st=0:d=0.12:alpha=1" if a > 0.05 else "") + f",fade=t=out:st={max(0, b - a - 0.12):.2f}:d=0.12:alpha=1"   # v2.6: crisp hand-over, first line on frame 0
         elif LP and q.endswith("title_loop.png"): fade = f",fade=t=in:st=0:d={LP - 0.05:.2f}:alpha=1"        # ends exactly like frame 1
         else: fade = f",fade=t=in:st=0:d=0.35:alpha=1,fade=t=out:st={b - a - 0.35:.2f}:d=0.35:alpha=1"
-        rise = ("end_rise" in IMP and q.endswith("end.png")) or ("lyric_rise" in IMP and os.path.basename(q).startswith("sub"))
+        rise = ("end_rise" in IMP and q.endswith("end.png")) or ("lyric_rise" in IMP and os.path.basename(q).startswith("sub")) or q.endswith("cta2.png")
         oy = f"'max(0,{36 if q.endswith('end.png') else 24}*(1-(t-{a:.3f})/0.45))'" if rise else "0"   # v2.5: the card glides up into place as it fades in
         f2.append(f"[{k}:v]format=rgba{fade},setpts=PTS+{a:.3f}/TB[o{k}]"); f2.append(f"{lv}[o{k}]overlay=0:{oy}:eof_action=pass[v{k}]"); lv = f"[v{k}]"
     na = len(ov) + 1
