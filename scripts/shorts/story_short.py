@@ -364,8 +364,8 @@ def main():
     ec = os.path.join(wd, "end.png"); end_card(spec["end_q"], ec, spec.get("end_sub"), zone=clear_zone(sc[-1]), plate=sc[-1]); ov.append((ec, L - END_S - LP, L - LP) if LP else (ec, L - END_S, L))   # Danni 11-17: end question/answer on screen 4 s
     # 11-22 Danni: the red flashing subscribe pill felt like an alarm → OFF on every render. A new calm card exists only as a SAMPLE
     # (spec "cta_style": "navy" | "light") until Danni approves it; nothing with a new design uploads before his OK.
-    if V27 and spec.get("cta_style"):
-        ct = os.path.join(wd, "cta2.png"); cta_card2(ct, spec["cta_style"], spec.get("cta_line") or "Thank you for singing with us.\nSubscribe so tomorrow's hymn finds you.", sc[-1], gift=str(spec.get("date") or "2026-12-25") <= "2026-12-25"); ov.append((ct, L - 3.5 - LP, L - LP))
+    if V27 and spec.get("cta_style", "navy"):   # Danni 11-23: NAVY end card APPROVED → default on every new Short (light dropped; no /stars line)
+        ct = os.path.join(wd, "cta2.png"); cta_card2(ct, spec.get("cta_style", "navy"), spec.get("cta_line") or "Thank you for singing with us.\nSubscribe so tomorrow's hymn finds you.", sc[-1], gift=str(spec.get("date") or "2026-12-25") <= "2026-12-25"); ov.append((ct, L - 3.5 - LP, L - LP))
     mk = os.path.join(wd, "marks.png"); marks(mk)   # v2.3: the tiny seal is no longer overlaid (judge: illegible at phone size; brand = @crossaihub on the end card)
     ov = [(q, a, b) for q, a, b in ov if b - a > 0.4]
     oin = sum((["-loop", "1", "-framerate", str(FPS), "-t", f"{b - a:.3f}", "-i", q] for q, a, b in ov), []); f2 = []; lv = "[0:v]"
