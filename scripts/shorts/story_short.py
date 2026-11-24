@@ -12,6 +12,7 @@ FD = Fm.FD; GOLD, CREAM = (244, 200, 112, 255), (255, 246, 230, 255)
 SEAL = os.path.join(Fm.D, "brand_seal", "v3", "dark", "watermark-dark_300.png")
 def font(n, s): return ImageFont.truetype(os.path.join(FD, n), s)
 V27 = True
+CTA_S = 4.8   # [WS18-EC2 · Dispatch 11-24] navy CTA end card: 0.6-s fade-in + ≥ 4.2 s fully on screen (was 3.5 → ~2.9 s)
 END_S = 4.0   # Danni 11-17: the end question/answer card stays 4 s (v2.7: 5.0 → ≥ 4 s fully visible after the fades)
 
 
@@ -261,15 +262,15 @@ def cta_card2(out, style, line, plate=None, gift=True):
     try:
         seal = Image.open(sp).convert("RGBA"); seal.thumbnail((120, 120), Image.LANCZOS); im.alpha_composite(seal, ((W - seal.width) // 2, y0 + 26))
     except Exception: pass
-    cy = y0 + 200; r = 34; labels = ("Subscribe", "Like", "Share"); fl = font("inter-latin-600-normal.ttf", 30)
-    for i, lab in enumerate(labels):
-        cx = W // 2 + (i - 1) * 230; d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=acc + (255,), width=3)
-        if i == 0: d.polygon([(cx - 10, cy - 15), (cx - 10, cy + 15), (cx + 16, cy)], fill=acc + (255,))   # play = subscribe to our channel
-        elif i == 1:   # heart
-            d.ellipse((cx - 17, cy - 13, cx + 1, cy + 5), fill=acc + (255,)); d.ellipse((cx - 1, cy - 13, cx + 17, cy + 5), fill=acc + (255,)); d.polygon([(cx - 17, cy - 1), (cx + 17, cy - 1), (cx, cy + 18)], fill=acc + (255,))
-        else:   # share arrow
-            d.line([(cx - 14, cy + 12), (cx - 14, cy - 2), (cx + 6, cy - 2)], fill=acc + (255,), width=4); d.polygon([(cx + 4, cy - 12), (cx + 18, cy - 2), (cx + 4, cy + 8)], fill=acc + (255,))
-        w = d.textlength(lab, font=fl); d.text((cx - w / 2, cy + r + 10), lab, font=fl, fill=fg + (235,))
+    # [WS18-EC2 · 11-24] LOCKED icon set v2 (plan/LOCKED/END_CARD_AND_BADGE.md · cta_icons.py): red SUBSCRIBE pill + white bell · thumbs-up
+    # (Like) · curved share arrow. Shorts used their own play/heart/arrow line icons because the lock named only long videos + CE.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import cta_icons as CI
+    cy = y0 + 200; r = 34; fl = font("inter-latin-600-normal.ttf", 30)
+    pill = CI.subscribe_pill(76, font("inter-latin-600-normal.ttf", 34)); ic = 62; gap = 70
+    row = pill.width + 2 * (gap + ic); px = (W - row) // 2; im.alpha_composite(pill, (px, cy - pill.height // 2))
+    for k, (icon, lab) in enumerate(((CI.like(ic, acc), "Like"), (CI.share(ic, acc), "Share"))):
+        cx = px + pill.width + gap + ic // 2 + k * (gap + ic); im.alpha_composite(icon, (cx - ic // 2, cy - ic // 2 - 10))
+        w = d.textlength(lab, font=fl); d.text((cx - w / 2, cy + ic // 2 - 4), lab, font=fl, fill=fg + (235,))
     f = font("cormorant-garamond-latin-700-normal.ttf", 50); y = cy + r + 64
     for row in line.split("\n"):
         while d.textlength(row, font=f) > (x1 - x0 - 60) and f.size > 36: f = font("cormorant-garamond-latin-700-normal.ttf", f.size - 2)
@@ -365,7 +366,7 @@ def main():
     # 11-22 Danni: the red flashing subscribe pill felt like an alarm → OFF on every render. A new calm card exists only as a SAMPLE
     # (spec "cta_style": "navy" | "light") until Danni approves it; nothing with a new design uploads before his OK.
     if V27 and spec.get("cta_style", "navy"):   # Danni 11-23: NAVY end card APPROVED → default on every new Short (light dropped; no /stars line)
-        ct = os.path.join(wd, "cta2.png"); cta_card2(ct, spec.get("cta_style", "navy"), spec.get("cta_line") or "Thank you for singing with us.\nSubscribe so tomorrow's hymn finds you.", sc[-1], gift=str(spec.get("date") or "2026-12-25") <= "2026-12-25"); ov.append((ct, L - 3.5 - LP, L - LP))
+        ct = os.path.join(wd, "cta2.png"); cta_card2(ct, spec.get("cta_style", "navy"), spec.get("cta_line") or "Thank you for singing with us.\nSubscribe so tomorrow's hymn finds you.", sc[-1], gift=str(spec.get("date") or "2026-12-25") <= "2026-12-25"); ov.append((ct, L - CTA_S - LP, L - LP))   # [WS18-EC2] ≥ 4 s fully visible after the 0.6-s fade
     mk = os.path.join(wd, "marks.png"); marks(mk)   # v2.3: the tiny seal is no longer overlaid (judge: illegible at phone size; brand = @crossaihub on the end card)
     ov = [(q, a, b) for q, a, b in ov if b - a > 0.4]
     oin = sum((["-loop", "1", "-framerate", str(FPS), "-t", f"{b - a:.3f}", "-i", q] for q, a, b in ov), []); f2 = []; lv = "[0:v]"
