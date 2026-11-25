@@ -12,7 +12,7 @@ FD = Fm.FD; GOLD, CREAM = (244, 200, 112, 255), (255, 246, 230, 255)
 SEAL = os.path.join(Fm.D, "brand_seal", "v3", "dark", "watermark-dark_300.png")
 def font(n, s): return ImageFont.truetype(os.path.join(FD, n), s)
 V27 = True
-CTA_S = 4.8   # [WS18-EC2 · Dispatch 11-24] navy CTA end card: 0.6-s fade-in + ≥ 4.2 s fully on screen (was 3.5 → ~2.9 s)
+CTA_S = 8.6   # [WS18-EC3 · Danni 11-24] navy CTA end card: 0.6-s fade-in + ≥ 8.0 s fully on screen (4 s was too short to read; was 3.5 → ~2.9 s)
 END_S = 4.0   # Danni 11-17: the end question/answer card stays 4 s (v2.7: 5.0 → ≥ 4 s fully visible after the fades)
 
 
@@ -291,7 +291,8 @@ def main():
     t0, t1 = float(spec["t0"]), float(spec["t1"])
     if V27:
         END_S = 5.0; _nx = [l["start"] for l in json.load(open(spec["lyrics"]))["lines"] if l["start"] >= t1 - 0.05]
-        t1 += max(0.0, min(1.0, (_nx[0] - t1 - 0.2) if _nx else 1.0))   # v2.7: end card ≥ 4 s fully visible (fades eat ~0.7 s); 1 s more of the hymn tail so no sung line is cut for it
+        t1 += max(0.0, min(1.0, (_nx[0] - t1 - 0.2) if _nx else 1.0))
+        t1 += CTA_S - 4.8   # [WS18-EC3] the 8-s card gets 3.8 s more of the hymn tail underneath it: everything sung before keeps its subtitles   # v2.7: end card ≥ 4 s fully visible (fades eat ~0.7 s); 1 s more of the hymn tail so no sung line is cut for it
     L = t1 - t0; assert L <= 58.5, "Short longer than 58 s"
     if spec.get("loop") and not 19.5 <= L <= 25.5: print(f"⚠ Ask Studio rule: length {L:.1f}s outside 20–25 s", flush=True)
     LP = 0.7 if spec.get("loop") else 0.0   # loop tail: last 0.7 s fades back into frame 1 (picture + title block) so the replay is seamless
@@ -343,7 +344,7 @@ def main():
     if LP: ov.append((tb.replace("title.png", "title_loop.png"), L - LP, L)); Image.open(tb).save(ov[-1][0])   # title back on the last frame = frame 1
     lyr = json.load(open(spec["lyrics"]))["lines"]
     SUBZ = sub_band(sc[0])   # v2.2 (judge 11-18: "subtitle over the boat") → the calmest band that does not cover the subject   # v2: judges hated subtitle boxes over the subject → the clearer band, same for the whole Short
-    LS = [l for l in lyr if l["end"] > t0 + 0.3 and l["start"] < t1 - 0.3]; stop = L - (END_S + LP + 0.2)
+    LS = [l for l in lyr if l["end"] > t0 + 0.3 and l["start"] < t1 - 0.3]; stop = L - ((max(END_S, CTA_S) if V27 else END_S) + LP + 0.2)   # [WS18-EC3] no lyric card under the 8-s end card
     for k, l in enumerate(LS):
         p = os.path.join(wd, f"sub{k:02d}.png"); pl_ = sc[min(n - 1, int((l["start"] - t0) / max(L, 1) * n))]
         if V26:   # 2 lines: current (underlined) + next; the card holds until the next line starts (no blink between lines); first card at 0:00
